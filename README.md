@@ -123,6 +123,17 @@ assistant delta ─▶ incremental lexer (marked) ─▶ block renderer + cache 
 | Terminal images | Kitty graphics protocol with Unicode placeholders (Ghostty, kitty) |
 | Fallback | Optional `latex`+`dvipng` or `tectonic` in a sandboxed child process. No shell escape, paranoid file access, 15 s timeout |
 
+## Terminal safety
+
+Untrusted terminal control characters are replaced with `�` before rendering and after HTML
+entity decoding. Tabs and newlines are retained; carriage returns are normalized to newlines.
+The renderer's own ANSI styling and Kitty image sequences remain intact. Clickable links are
+limited to valid `https:`, `http:` and `mailto:` destinations; other links remain text.
+
+This does not sandbox the extension, downloaded dependencies, or the optional TeX toolchain.
+For fewer external side effects, set `PI_BETTER_RENDER_TEX=off`,
+`PI_BETTER_RENDER_MERMAID_INSTALL=0` and `PI_BETTER_RENDER_FONT_DOWNLOAD=0`.
+
 ## Install
 
 ```sh

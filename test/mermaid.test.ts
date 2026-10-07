@@ -90,6 +90,13 @@ test("mermaid: themed output colors borders and arrows without breaking widths",
 	assert.ok(lines.join("").includes("\x1b[38;2;"));
 });
 
+test("mermaid: raw and entity-encoded terminal controls cannot reach output", () => {
+	for (const label of ["\x1bOlabel\x9b2J", "&#27;]52;c;UFJPQkU=&#7;"]) {
+		const text = render(fence(`graph TD\n  A[\"${label}\"] --> B[Done]`)).join("\n");
+		assert.ok(!/[\x00-\x08\x0b-\x1f\x7f-\x9f]/.test(text), JSON.stringify(text));
+	}
+});
+
 test("mermaid: other code blocks are untouched", () => {
 	assert.ok(render("```ts\ngraph TD\n```").join("\n").includes("graph TD"));
 });

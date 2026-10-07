@@ -1,4 +1,5 @@
 import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { sanitizeTerminalText } from "../sanitize.ts";
 
 export { visibleWidth };
 
@@ -91,14 +92,14 @@ const ENTITIES: Record<string, string> = {
 };
 
 export function decodeEntities(text: string): string {
-	if (!text.includes("&")) return text;
-	return text.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (match, body: string) => {
+	if (!text.includes("&")) return sanitizeTerminalText(text);
+	return sanitizeTerminalText(text.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (match, body: string) => {
 		if (body[0] === "#") {
 			const code = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
 			return Number.isFinite(code) && code > 0 && code < 0x110000 ? String.fromCodePoint(code) : match;
 		}
 		return ENTITIES[body.toLowerCase()] ?? match;
-	});
+	}));
 }
 
 /** Plain text of an inline token tree (used for callout detection, link labels). */

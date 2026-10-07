@@ -8,6 +8,7 @@
  */
 import type { Component } from "@earendil-works/pi-tui";
 import { state } from "../state.ts";
+import { sanitizeTerminalText } from "../sanitize.ts";
 import type { Style } from "../style.ts";
 import { renderBlock } from "./blocks.ts";
 import type { MathRenderer, RenderContext } from "./context.ts";
@@ -56,7 +57,8 @@ export interface RichMarkdownOptions {
 /** Render markdown to terminal lines of at most `width` columns (no padding). */
 export function renderMarkdown(markdown: string, width: number, options: Omit<RichMarkdownOptions, "paddingX" | "transform">): string[] {
 	const { style, math, streaming } = options;
-	const tokens = lex(markdown, streaming);
+	// Neutralize source controls before any lexer, highlighter or diagram renderer sees them.
+	const tokens = lex(sanitizeTerminalText(markdown), streaming);
 	const ctx: RenderContext = { style, math, width, streaming, listDepth: 0 };
 	const base = `${width}\0${style.key}\0${math.key}\0${state.version}\0${state.lineNumbers ? 1 : 0}${state.mermaid ? 1 : 0}\0`;
 	const lastIndex = tokens.length - 1;

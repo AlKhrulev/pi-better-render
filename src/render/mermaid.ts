@@ -24,6 +24,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { bumpVersion, requestRender, state } from "../state.ts";
+import { sanitizeTerminalText } from "../sanitize.ts";
 import type { RenderContext } from "./context.ts";
 import { visibleWidth } from "./util.ts";
 
@@ -234,7 +235,7 @@ export function renderMermaid(source: string, ctx: RenderContext): string[] | un
 		} catch {
 			return undefined;
 		}
-		const lines = restoreWide(art, wide)
+		const lines = sanitizeTerminalText(restoreWide(art, wide))
 			.split("\n")
 			.map((l) => l.replace(/\s+$/, ""));
 		while (lines.length > 0 && lines[0] === "") lines.shift();

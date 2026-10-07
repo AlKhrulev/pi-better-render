@@ -9,6 +9,15 @@
  * user/assistant text before every provider request.
  */
 
+/** Neutralize untrusted terminal controls; retain tabs/newlines and normalize CR/CRLF.
+ * Apply before rendering, not to styled output: our own ANSI and Kitty sequences must survive.
+ */
+const TERMINAL_CONTROLS = /\r\n?|[\x00-\x08\x0b-\x1f\x7f-\x9f]/g;
+
+export function sanitizeTerminalText(text: string): string {
+	return text.replace(TERMINAL_CONTROLS, (control) => control[0] === "\r" ? "\n" : "\uFFFD");
+}
+
 const KITTY_APC = /\x1b_G[^\x1b]*(?:\x1b\\)?/g;
 const ITERM_OSC = /\x1b\]1337;File=[^\x07\x1b]*(?:\x07|\x1b\\)?/g;
 /** A whole placeholder run: id color, cells, color reset. */

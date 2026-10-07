@@ -1,4 +1,5 @@
 import { hyperlink, renderLatex } from "@earendil-works/pi-tui";
+import { sanitizeTerminalText } from "../sanitize.ts";
 import type { RenderContext } from "./context.ts";
 import { decodeEntities, plainText } from "./util.ts";
 
@@ -6,11 +7,22 @@ import { decodeEntities, plainText } from "./util.ts";
 export function latexFallback(tex: string, display = false): string {
 	try {
 		const rendered = renderLatex(tex, { display });
-		if (rendered !== undefined) return rendered;
+		if (rendered !== undefined) return sanitizeTerminalText(rendered);
 	} catch {
 		// fall through to the raw source
 	}
-	return tex;
+	return sanitizeTerminalText(tex);
+}
+
+/** Only ordinary web/email destinations may become terminal hyperlinks. */
+function safeLink(href: string): boolean {
+	if (/[\x00-\x20\x7f-\x9f\uFFFD]/.test(href)) return false;
+	try {
+		const url = new URL(href);
+		return url.protocol === "https:" || url.protocol === "http:" || url.protocol === "mailto:";
+	} catch {
+		return false;
+	}
 }
 
 /** Render inline tokens to a single styled string (may contain "\n" from hard breaks). */
@@ -44,12 +56,13 @@ function renderInlineToken(token: any, ctx: RenderContext): string {
 		case "br":
 			return "\n";
 		case "link": {
-			const label = renderInline(token.tokens, ctx) || token.href;
+			const href = decodeEntities(token.href ?? "");
+			const label = renderInline(token.tokens, ctx) || href;
 			const styled = style.fg("mdLink", style.underline(label));
-			if (!token.href || token.href.startsWith("#")) return styled;
+			if (!href || href.startsWith("#")) return styled;
 			const shown = plainText(token.tokens);
-			const url = shown === token.href || `mailto:${shown}` === token.href ? "" : style.fg("mdLinkUrl", ` ‹${token.href}›`);
-			return hyperlink(styled, token.href) + (shown.length > 0 && token.href.length <= 60 ? url : "");
+			const url = shown === href || `mailto:${shown}` === href ? "" : style.fg("mdLinkUrl", ` ‹${href}›`);
+			return (safeLink(href) ? hyperlink(styled, href) : styled) + (shown.length > 0 && href.length <= 60 ? url : "");
 		}
 		case "image":
 			return style.fg("muted", `[image: ${token.text || token.href}]`);
