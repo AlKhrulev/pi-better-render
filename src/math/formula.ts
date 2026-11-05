@@ -6,11 +6,12 @@
  * formula failed everywhere. MathJax failures are retried with a local TeX
  * engine in the background when one is installed.
  */
-import { getCapabilities, getCellDimensions, getPngDimensions } from "@earendil-works/pi-tui";
+import { getCellDimensions, getPngDimensions } from "@earendil-works/pi-tui";
 import type { MathRenderer } from "../render/context.ts";
 import { bumpVersion, requestRender, state } from "../state.ts";
-import { allocateId, MAX_PLACEHOLDER_CELLS, registerImage, placeholderRows, placeholderTerminal } from "./kitty.ts";
+import { allocateId, imageMode, MAX_PLACEHOLDER_CELLS, registerImage, placeholderRows } from "./kitty.ts";
 import { FontPendingError } from "./cjk-font.ts";
+import { rememberFormulaSource } from "./copy.ts";
 import { centeredCanvas, MathError, mathjaxReady, type Raster, rasterize, rasterizeSvg } from "./mathjax.ts";
 import { detectTexBackend } from "./tex-backend.ts";
 
@@ -34,7 +35,7 @@ export function clearFormulaCache(): void {
 }
 
 export function imagesAvailable(): boolean {
-	return getCapabilities().images === "kitty" && placeholderTerminal();
+	return imageMode() !== "off";
 }
 
 function remember(key: string, value: Placed | MathError): Placed | MathError {
@@ -161,17 +162,21 @@ export function createMathRenderer(getColor: () => string): MathRenderer {
 
 	return {
 		get key() {
-			return `${state.math}|${mathjaxReady() ? 1 : 0}|${imagesAvailable() ? 1 : 0}|${getColor()}|${getCellDimensions().widthPx}x${getCellDimensions().heightPx}`;
+			return `${state.math}|${mathjaxReady() ? 1 : 0}|${imageMode()}|${getColor()}|${getCellDimensions().widthPx}x${getCellDimensions().heightPx}`;
 		},
-		inline(tex, _display, streaming) {
+		inline(tex, _display, streaming, source) {
 			if (!active(streaming)) return undefined;
 			const placed = place(tex, false, MAX_PLACEHOLDER_CELLS, 1);
-			return placed ? placeholderRows(placed.id, placed.columns, 1)[0] : undefined;
+			if (!placed) return undefined;
+			rememberFormulaSource(placed.id, source ?? `$${tex}$`, false);
+			return placeholderRows(placed.id, placed.columns, 1)[0];
 		},
-		block(tex, maxColumns, streaming) {
+		block(tex, maxColumns, streaming, source) {
 			if (!active(streaming)) return undefined;
 			const placed = place(tex, true, maxColumns, MAX_BLOCK_ROWS);
-			return placed ? placeholderRows(placed.id, placed.columns, placed.rows) : undefined;
+			if (!placed) return undefined;
+			rememberFormulaSource(placed.id, source ?? `$$\n${tex}\n$$`, true);
+			return placeholderRows(placed.id, placed.columns, placed.rows);
 		},
 	};
 }

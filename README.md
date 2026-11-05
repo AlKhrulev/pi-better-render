@@ -1,8 +1,8 @@
 # pi-better-render
 
 Streaming-first rich rendering for [pi](https://pi.dev)'s TUI. Markdown, code blocks, tables and
-LaTeX formulas are rendered as the answer streams in, with formulas shown as real images. It is
-built for Ghostty and kitty.
+LaTeX formulas are rendered as the answer streams in. Formulas are real images in terminals with the
+Kitty graphics protocol. Ghostty, kitty and WezTerm are tested; Warp is detected but not tested yet.
 
 ![Streaming Markdown, tables, code and formulas in Ghostty](assets/demo.gif)
 
@@ -13,24 +13,27 @@ built for Ghostty and kitty.
   waiting for the message to end.
 - **In process, no big runtime.** No browser, Pandoc or daemon is involved. A formula takes about
   1 ms from TeX to PNG.
-- **Text-like images.** Formula images use Kitty Unicode placeholders. Each image is sent once;
-  after that it behaves as ordinary text cells, so it wraps, scrolls and diffs like text. Inline
-  formulas sit inside the line.
+- **Text-like images.** Inline formulas sit inside the line, and every formula wraps, scrolls and
+  diffs like text. Each image is sent to the terminal once and drawn in the theme's text color, on
+  light and dark backgrounds. Formulas stay in the scrollback after pi exits.
+- **Copy as Markdown.** Selecting an answer copies each formula as its LaTeX source, so pasted text
+  is working Markdown again.
 
 ## Compared with other pi extensions
 
 | | **pi-better-render** | [pi-math](https://github.com/Fadouse/pi-math) | [pi-markdown-preview](https://github.com/omaclaren/pi-markdown-preview) | [pi-rich-renderer](https://github.com/dbydd/pi-rich-renderer) |
 |---|---|---|---|---|
 | Where it shows | In the chat, automatically | In the chat, automatically | Separate viewer (`/preview`), browser or PDF | In the chat, automatically |
-| Updates while streaming | ✅ Markdown and formulas, on every delta | ✅ Formulas | ❌ On demand; watch mode refreshes after each completed reply | ❌ Only when the message ends |
+| Updates while streaming | ✅ Markdown and formulas, on every delta | ✅ Formulas | ❌ On demand; the browser's live mode updates per recorded message, not per token | ❌ Only when the message ends |
 | Restyles Markdown (headings, callouts, tables, code) | ✅ | ❌ pi's built-in | ✅ As a Pandoc HTML page | ❌ pi's built-in |
 | Formulas inside the text line | ✅ | ✅ | ✅ Inside a page screenshot | ❌ Each formula becomes a block image |
+| Copying formulas from the chat | ✅ As their LaTeX source (fullscreen mode) | ❌ Not handled | – Separate viewer | ❌ Not handled |
 | Math engine | MathJax 4, with optional TeX fallback | MathJax 3 | Pandoc MathML + MathJax in Chromium | `latex` + `dvipng` per formula |
 | Needs beyond `npm install` | Nothing (TeX is optional) | Nothing | Pandoc and Chromium; LaTeX for PDF | A TeX installation |
 | Stored message and LLM context | Untouched (display only) | Untouched (display only) | Untouched (read only) | Message content replaced at `message_end`; original restored for the LLM |
-| Terminals with images | Ghostty, kitty | Ghostty, kitty; display formulas also in WezTerm, Warp, iTerm2 | Ghostty, kitty, iTerm2, WezTerm | Those supported by pi's image component |
+| Terminals with images | Kitty graphics terminals: Ghostty, kitty, WezTerm, Warp, others by override | Ghostty, kitty; WezTerm, Warp; iTerm2 (display formulas only) | Ghostty, kitty, iTerm2, WezTerm | Those supported by pi's image component |
 | Without images | Unicode approximation | Original LaTeX | – | Original LaTeX |
-| Beyond chat rendering | Mermaid diagrams as Unicode art | Custom macros and environments | Browser and PDF export, Mermaid, file preview, export tool | Disk cache of PNGs |
+| Beyond chat rendering | Mermaid diagrams as Unicode art | Custom macros and environments | Browser and PDF export, live view of tool calls, Mermaid, file preview, export tool | Disk cache of PNGs |
 
 Each existing extension covers one part of the problem:
 
@@ -43,85 +46,8 @@ pi-better-render fills the gap between them. It renders the whole answer, Markdo
 math alike, in the chat while it streams, in process, with nothing extra to install.
 
 The others are still the better choice in some cases. For PDF or browser output, or for Mermaid
-diagram types beyond flowchart, sequence, state, class and ER, use pi-markdown-preview. For formula images in iTerm2, WezTerm or Warp, use pi-math.
-(Comparison as of September 2026.)
-
-## What it renders
-
-| Element | Rendering |
-|---|---|
-| Headings | H1 with a `━` rule, H2 with a `─` rule, H3 as `▍ title`, H4–H6 by color. No `#` markers |
-| Emphasis | **bold**, *italic*, ~~strikethrough~~, `inline code`, clickable links (OSC 8) with the URL shown |
-| Lists | `• ◦ ▪` by depth, original numbering, `☑`/`☐` tasks, hanging indent |
-| Quotes | `▎` bar. GitHub callouts `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]` |
-| Code | Background block, language label, pi's syntax highlighting, `↪` wraps, optional line numbers, no fences |
-| Tables | Rounded borders, bold header, `:-:` alignment, correct CJK widths. Columns shrink, then fall back to cards |
-| Mermaid | ` ```mermaid ` flowchart, sequence, state, class and ER diagrams drawn with box characters (correct CJK widths). The renderer is downloaded on the first diagram (see below). Other types, invalid source or diagrams wider than the terminal stay as code |
-| Rules | Full-width `─` |
-| Math | See below |
-
-### Math
-
-- **Delimiters:** inline `$…$` and `\(…\)`; display `$$…$$`, `\[…\]` and `\begin{align}…` (plus the
-  other AMS environments).
-- **TeX packages:** AMS, mathtools, physics (`\dv`, `\pdv`, `\qty`, `\abs`, `\norm`), mhchem
-  (`\ce`), braket, cancel, cases, empheq, bbm/dsfont/bboldx (`\mathbbm`, `\mathds`), color,
-  boldsymbol, upgreek, gensymb, units, extpfeil, centernot, bussproofs, amscd.
-- **Extra macros:** `\bm`, `\llbracket`/`\rrbracket`, and a single `\tag{…}`.
-- **CJK text:** text inside formulas, such as `\text{中文}` or `\text{한국어}`, is rendered with a
-  system CJK font. Without one (common on Linux servers and containers), Noto Sans SC (10 MB, Han
-  and kana) or KR (6 MB, Hangul) is downloaded once into `~/.pi/agent/better-render/fonts`, checked
-  against a pinned SHA-256. The formula shows as text until the font arrives, then as an image.
-- **Fallback:** if MathJax rejects a formula and a local `latex`+`dvipng` or `tectonic` is
-  installed, that engine typesets it in the background. Where images are not possible, formulas
-  use pi's Unicode approximation.
-
-## Performance
-
-Measured on an Apple M-series laptop.
-
-| | |
-|---|---|
-| MathJax 4 + resvg startup (background, after session start) | ~105 ms |
-| Formula, TeX → SVG | ~0.3 ms |
-| Formula, TeX → SVG → PNG on the cell grid | ~1 ms |
-| Formula with CJK text | ~10 ms |
-| Streaming delta at the end of a 61k-character answer | ~0.6 ms per frame |
-| Streaming delta, 3.8k-character answer | ~0.04 ms per frame |
-
-Streaming cost stays nearly flat as a message grows, for these reasons:
-
-- **Incremental lexing.** Only the last two blocks are lexed again; earlier tokens are reused.
-- **Block cache.** Rendered blocks are cached by token identity, so finished blocks are never
-  rendered again.
-- **Formula cache.** Formula rasters are cached by TeX, color and cell size, and each image is sent
-  to the terminal only once.
-- **Images travel with their frame.** An image is sent together with the frame that first shows
-  it. pi does a full clear on resize; after one, images are sent again, so formulas survive window
-  resizes.
-
-Run `npm run bench` to reproduce the streaming numbers.
-
-## How it works
-
-```
-assistant delta ─▶ incremental lexer (marked) ─▶ block renderer + cache ─▶ ANSI lines ─▶ pi-tui
-                                                   │
-                                                   └─ formula ─▶ MathJax 4 (TeX → SVG)
-                                                                  ─▶ resvg (SVG → PNG, cell-exact)
-                                                                  ─▶ Kitty graphics, virtual placement
-                                                                  ─▶ U+10EEEE placeholder cells in the line
-```
-
-| Part | Technology |
-|---|---|
-| Host | pi extension API. It patches the assistant message component and registers a `context` hook |
-| Markdown | `marked` lexer (via pi-tui), with its own incremental re-lexing and block renderers |
-| Code highlighting | pi's theme highlighter |
-| Math typesetting | [MathJax 4](https://www.mathjax.org/) (`@mathjax/src`, New Computer Modern font), in process and synchronous |
-| Rasterizing | [`@resvg/resvg-js`](https://github.com/yisibl/resvg-js) (Rust, native). Canvases are sized to whole terminal cells, so images are never stretched |
-| Terminal images | Kitty graphics protocol with Unicode placeholders (Ghostty, kitty) |
-| Fallback | Optional `latex`+`dvipng` or `tectonic` in a sandboxed child process. No shell escape, paranoid file access, 15 s timeout |
+diagram types beyond flowchart, sequence, state, class and ER, use pi-markdown-preview. For formula images in iTerm2, use pi-math.
+(Comparison as of October 2026.)
 
 ## Terminal safety
 
@@ -142,71 +68,147 @@ pi install git:github.com/JeffeyChou/pi-better-render
 pi -e npm:pi-better-render                            # try it for one run without installing
 ```
 
-From a local checkout:
+From a local checkout: `npm install`, then `pi install ./path/to/pi-better-render` (or `pi -e ./src/index.ts`).
 
-```sh
-npm install
-pi install ./path/to/pi-better-render                 # or: pi -e ./src/index.ts
-```
+## What it renders
 
-Images need Ghostty or kitty. They are unavailable inside tmux/screen and in terminals without Kitty
-Unicode placeholders. There, formulas use pi's Unicode approximation and everything else still
-renders.
+- **Markdown:** headings without `#` markers, emphasis, clickable links (OSC 8), lists and task lists,
+  quotes and GitHub callouts (`> [!NOTE]`, `[!TIP]`, `[!WARNING]` …), rules.
+- **Code:** a background block with the language label and pi's syntax highlighting, no fences.
+- **Tables:** rounded borders, column alignment and correct CJK widths. Narrow terminals shrink the
+  columns, then show cards.
+- **Math:** `$…$`, `\(…\)`, `$$…$$`, `\[…\]` and the AMS environments, typeset by MathJax 4 with AMS,
+  mathtools, physics, mhchem, braket, cancel, bbm and more. Formulas take the theme's text color, in
+  light and dark terminals. `\text{中文}` uses a system CJK font, or downloads Noto Sans SC/KR once
+  (checked against a pinned SHA-256). Formulas MathJax rejects go to a local `latex`+`dvipng` or
+  `tectonic` when one is installed. Without terminal images, formulas use pi's Unicode approximation.
+- **Mermaid:** flowchart, sequence, state, class and ER diagrams as box drawings. The renderer
+  (about 11 MB) is downloaded into `~/.pi/agent/better-render/deps` on the first diagram; until then,
+  and for other diagram types, the block stays as code.
+
+## Copying
+
+In pi's fullscreen mode (the default), selecting text copies formulas as their Markdown source,
+for example `$C_\ell^*$` or a `$$ … $$` block, so pasted answers keep working math. Code blocks have a
+**Copy** button that copies the source without fences or line numbers.
+
+In regular mode (`--tui-mode regular`) the terminal does the copying, and formulas come out as the
+image placeholder characters.
+
+## Terminals
+
+Formula images work in terminals with the Kitty graphics protocol. Everything else renders in any
+terminal, and formulas fall back to a Unicode approximation where images are not available.
+
+| Terminal | How formulas are drawn | Tested with pi 1.4.0 on macOS |
+|---|---|---|
+| Ghostty | Unicode placeholders | 1.3.1 |
+| kitty | Unicode placeholders | 0.49.2 |
+| WezTerm | One direct placement per formula row | 20240203 and nightly 20261026 |
+| Warp | One direct placement per formula row | Not tested |
+| Another terminal with Kitty graphics | Direct placements, after the override below | – |
+| tmux, screen, terminals without Kitty graphics | Unicode approximation | – |
+
+Ghostty, kitty and WezTerm were tested with light and dark colors, in fullscreen and regular mode.
+
+pi detects the four terminals above. For another terminal with the Kitty graphics protocol, start pi
+with `PI_IMAGE_PROTOCOL=kitty` (pi's own override), and add `PI_BETTER_RENDER_IMAGES=placeholder`
+if the terminal also supports Unicode placeholders.
 
 ## Commands
 
-`/better-render` takes one of these arguments:
+`/better-render <argument>`:
 
-- `status` shows the renderer state, the math engine, cache hit rates and formula timings.
-- `on` / `off` turns rich rendering on, or switches back to pi's built-in Markdown.
-- `math:streaming`, `math:final` or `math:off` controls when formulas become images.
-- `lines` toggles line numbers in code blocks.
-- `mermaid` toggles drawing ` ```mermaid ` blocks as diagrams (off shows their source).
-  The diagram renderer ([beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid), about
-  11 MB with its layout engine) is not installed with the package. The first ` ```mermaid ` block
-  installs the pinned version with npm into `~/.pi/agent/better-render/deps` in the background; the
-  block shows as code until then and turns into a diagram when it arrives.
-- `clear-cache` drops cached renders and the images sent to the terminal.
+| Argument | Effect |
+|---|---|
+| `status` | Renderer state, math engine, cache hit rates and formula timings |
+| `on` / `off` | Rich rendering, or pi's built-in Markdown |
+| `math:streaming` / `math:final` / `math:off` | Formulas become images while streaming, after the message ends, or never |
+| `lines` | Toggle line numbers in code blocks |
+| `mermaid` | Toggle Mermaid diagrams (off shows their source) |
+| `clear-cache` | Drop cached renders and free terminal images (formulas in the scrollback go blank) |
 
 Environment variables:
 
-- `PI_BETTER_RENDER_DEBUG=1` logs context-sanitizer checks to `~/.pi/agent/better-render-debug.log`.
-- `PI_BETTER_RENDER_TEX=off|latex|tectonic` picks the TeX fallback.
-- `PI_BETTER_RENDER_MERMAID_INSTALL=0` never downloads the Mermaid renderer (diagrams stay as code
-  unless `beautiful-mermaid` is already installed).
-- `PI_BETTER_RENDER_DEPS_DIR` changes where it is downloaded (default `~/.pi/agent/better-render/deps`).
-- `PI_BETTER_RENDER_FONT_DOWNLOAD=0` never downloads a CJK font; `PI_BETTER_RENDER_FONTS_DIR`
-  changes where it goes.
-- `PI_BETTER_RENDER_PLACEHOLDERS=0|1` overrides terminal detection. 
+| Variable | Effect |
+|---|---|
+| `PI_BETTER_RENDER_IMAGES=placeholder\|direct\|off` | Override terminal detection |
+| `PI_BETTER_RENDER_TEX=off\|latex\|tectonic` | Pick the TeX fallback |
+| `PI_BETTER_RENDER_MERMAID_INSTALL=0` | Never download the Mermaid renderer |
+| `PI_BETTER_RENDER_FONT_DOWNLOAD=0` | Never download a CJK font |
+| `PI_BETTER_RENDER_DEPS_DIR`, `PI_BETTER_RENDER_FONTS_DIR` | Where downloads go |
+| `PI_BETTER_RENDER_DEBUG=1` | Log context-sanitizer checks to `~/.pi/agent/better-render-debug.log` |
+
+## How it works
+
+The extension swaps pi's Markdown component for its own and never edits the message, so the session
+file and the next LLM request keep the original Markdown and LaTeX. Each delta is lexed incrementally
+with `marked`, and finished blocks come from a cache. Formulas are typeset in process by MathJax 4
+(TeX → SVG), rasterized by resvg onto whole terminal cells, and sent once over the Kitty graphics
+protocol, so they wrap and scroll like text.
+
+## Performance
+
+On an Apple M-series laptop, a formula takes about 1 ms from TeX to PNG (about 10 ms with CJK text),
+and MathJax starts in about 105 ms in the background. A streaming frame takes about 0.6 ms on average
+over a 61k-character answer. `npm run bench` reproduces the streaming numbers.
 
 ## Development
 
 ```sh
 npm test                                                  # unit tests (rebuilds vendor/ first)
-npm run build                                             # rebuild vendor/ (the trimmed MathJax)
 npm run typecheck
 npm run bench                                             # streaming cost per delta
-npm run preview -- test/fixtures/perceptron.md            # render a file in this terminal
-npm run preview -- test/fixtures/perceptron.md --stream   # also time the streaming path
-npm run preview -- test/fixtures/perceptron.md --live     # animate the stream on screen
+npm run preview -- test/fixtures/perceptron.md [--live]   # render a file in this terminal
 ```
 
-MathJax is a development dependency. `npm run build` bundles the parts the renderer uses into
-`vendor/` (about 12 MB, most of it on-demand font data), so an install is about 15 MB instead of
-118 MB. `vendor/` is committed because pi installs git packages with `npm install --omit=dev` and
-no build step. MathJax is pinned to exact versions and the build is deterministic, so `vendor/`
-only changes when those pins change (the build refuses ranges or a drifted `node_modules`);
-`vendor/README.md` lists what it contains. Without `vendor/`, the code loads MathJax from
-`node_modules` directly.
+`npm run build` bundles the MathJax parts in use into `vendor/` (about 12 MB, mostly on-demand font
+data), so an install is about 15 MB instead of 118 MB. `vendor/` is committed because pi installs git
+packages without a build step; MathJax is pinned exactly, so `vendor/` only changes with the pins.
+`npm publish` runs the typecheck and tests first.
 
-Publishing:
+## Changelog
 
-```sh
-npm pack --dry-run   # the tarball holds src/, vendor/, README.md, LICENSE and package.json
-npm publish          # runs typecheck and tests first (prepublishOnly)
-```
+### 0.5.0 (2026-10-31)
 
-The `pi-package` keyword lists the package in the [pi package gallery](https://pi.dev/packages).
+All in [#6](https://github.com/JeffeyChou/pi-better-render/pull/6).
+
+- Formulas were nearly invisible in light terminals with pi's default `system` theme
+  ([#5](https://github.com/JeffeyChou/pi-better-render/issues/5)). They now take the theme's text
+  color, and messages already on screen follow theme switches.
+- Selecting text in fullscreen mode copies formulas as their Markdown source instead of placeholder
+  characters.
+- Tested in Ghostty, kitty and WezTerm, with a terminal support table in this README.
+- WezTerm showed only the last row of a display formula, and only the last copy of a formula used
+  twice. Every row and every copy now shows.
+- A terminal started from a Ghostty or kitty shell (`open -a WezTerm`) was taken for Ghostty or kitty
+  and got garbled formulas.
+
+### 0.4.0 (2026-10-18)
+
+- Copy buttons on code blocks in fullscreen mode
+  ([#2](https://github.com/JeffeyChou/pi-better-render/pull/2), by @xiaotianxt).
+- Font download tests wait for the download instead of a fixed delay (#3, #4).
+
+### 0.3.0 (2026-10-12)
+
+- Formulas stay in the scrollback after pi exits, and after `/new`, `/resume` or `/reload`
+  ([#1](https://github.com/JeffeyChou/pi-better-render/pull/1)).
+- Formulas survive pi's fullscreen redraws, which delete image placements.
+- Formula images in WezTerm and Warp, through direct placements. `PI_BETTER_RENDER_IMAGES` overrides
+  the detection.
+
+### 0.2.0 (2026-09-24)
+
+- Mermaid diagrams as box drawings, with the renderer downloaded on first use, and
+  `/better-render mermaid`.
+- CJK text in formulas, with Noto Sans SC/KR downloaded when no system font covers it.
+- MathJax is bundled into `vendor/`, so an install shrinks from 118 MB to about 15 MB.
+
+### 0.1.0 (2026-09-24)
+
+- First release: streaming Markdown, code, tables and MathJax 4 formula images in pi's TUI, display
+  only, with incremental lexing.
 
 ## Credits
 
