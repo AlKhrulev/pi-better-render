@@ -64,7 +64,7 @@ test("a system font is used when one covers the script", () => {
 
 test("a missing font downloads once, formulas wait for it, then it is used", { timeout: 5000 }, async (t) => {
 	const { fetch, calls, release } = gatedFetch(bytes);
-	configureTextFonts({ system: none, generic: [], dir, fetch, downloads: { han: spec(bytes), hangul: spec(bytes, "FakeKR.ttf") } });
+	configureTextFonts({ system: none, generic: [], dir, fetch, allowDownload: true, downloads: { han: spec(bytes), hangul: spec(bytes, "FakeKR.ttf") } });
 	const settled = downloadSettled(t);
 	const version = state.version;
 
@@ -84,14 +84,14 @@ test("a missing font downloads once, formulas wait for it, then it is used", { t
 	assert.match(textFontStatus(), /CJK: Fake\.ttf/);
 
 	// Later sessions find the file without downloading.
-	configureTextFonts({ system: none, generic: [], dir, fetch, downloads: { han: spec(bytes), hangul: spec(bytes, "FakeKR.ttf") } });
+	configureTextFonts({ system: none, generic: [], dir, fetch, allowDownload: true, downloads: { han: spec(bytes), hangul: spec(bytes, "FakeKR.ttf") } });
 	assert.deepEqual(textFontOptions(svgWith("中文")), { loadSystemFonts: false, fontFiles: [path] });
 	assert.equal(calls.length, 1);
 });
 
 test("a corrupted download is rejected and not retried", { timeout: 5000 }, async (t) => {
 	const { fetch, calls, release } = gatedFetch(Buffer.from("tampered"));
-	configureTextFonts({ system: none, generic: [], dir, fetch, downloads: { han: spec(bytes, "Other.ttf"), hangul: spec(bytes, "OtherKR.ttf") } });
+	configureTextFonts({ system: none, generic: [], dir, fetch, allowDownload: true, downloads: { han: spec(bytes, "Other.ttf"), hangul: spec(bytes, "OtherKR.ttf") } });
 	const settled = downloadSettled(t);
 	assert.throws(() => textFontOptions(svgWith("中文")), FontPendingError);
 	release();
@@ -115,7 +115,7 @@ const realFont = ["/System/Library/Fonts/Hiragino Sans GB.ttc", "/usr/share/font
 test("end to end: a \\text{中文} formula is text while the font downloads, an image after", { skip: !realFont && "no CJK font to stand in for the download", timeout: 5000 }, async (t) => {
 	const data = readFileSync(realFont!);
 	const { fetch, release } = gatedFetch(data);
-	configureTextFonts({ system: none, generic: [], dir, fetch, downloads: { han: spec(data, "Real.ttc"), hangul: spec(data, "RealKR.ttc") } });
+	configureTextFonts({ system: none, generic: [], dir, fetch, allowDownload: true, downloads: { han: spec(data, "Real.ttc"), hangul: spec(data, "RealKR.ttc") } });
 	loadMathJaxSync();
 	setKittyWriter(undefined);
 	setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
